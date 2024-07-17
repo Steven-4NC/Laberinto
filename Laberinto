@@ -1,1 +1,182 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <ncurses.h>
+#include <unistd.h>
+
+// Definimos el tamaño del laberinto
+#define SIZE 13
+
+// Definimos los valores para los diferentes tipos de celdas en el laberinto
+#define CAMINO 0
+#define PARED 1
+#define INICIO_X 0
+#define INICIO_Y 0
+#define FIN_X (SIZE - 1)
+#define FIN_Y (SIZE - 1)
+#define RUTA 2
+
+// Matriz que representará el laberinto
+int laberinto[SIZE][SIZE];
+
+// Direcciones posibles (derecha, abajo, izquierda, arriba)
+int direcciones[4][2] = { {0, 1}, {1, 0}, {0, -1}, {-1, 0} };
+
+// Inicializamos el laberinto con paredes
+void inicializar_laberinto() {
+    for (int i = 0; i < SIZE; i++) {
+        for (int j = 0; j < SIZE; j++) {
+            laberinto[i][j] = PARED;
+        }
+    }
+}
+
+// Verificamos si el movimiento es válido (dentro de los límites y en una pared)
+int es_movimiento_valido(int x, int y) {
+    return x >= 0 && x < SIZE && y >= 0 && y < SIZE && laberinto[x][y] == PARED;
+}
+
+// Mezclamos un arreglo de enteros (para mezclar las direcciones de movimiento)
+void mezclar(int array[], int n) {
+    for (int i = n - 1; i > 0; i--) {
+        int j = rand() % (i + 1);
+        int temp = array[i];
+        array[i] = array[j];
+        array[j] = temp;
+    }
+}
+
+// Generamos el laberinto usando DFS
+void generar_laberinto(int x, int y) {
+    laberinto[x][y] = CAMINO;
+
+    // Mezclamos las direcciones para hacer la generación más aleatoria
+    int dirs[] = {0, 1, 2, 3};
+    mezclar(dirs, 4);
+
+    // Intentamos movernos en cada dirección
+    for (int i = 0; i < 4; i++) {
+        int nx = x + direcciones[dirs[i]][0] * 2;
+        int ny = y + direcciones[dirs[i]][1] * 2;
+
+        if (es_movimiento_valido(nx, ny)) {
+            laberinto[x + direcciones[dirs[i]][0]][y + direcciones[dirs[i]][1]] = CAMINO;
+            generar_laberinto(nx, ny);
+        }
+    }
+}
+
+// Estructura para representar un punto en el laberinto
+typedef struct {
+    int x, y;
+} Punto;
+
+// Estructura para la cola usada en BFS
+typedef struct {
+    Punto puntos[SIZE * SIZE];
+    int frente, final;
+} Cola;
+
+// Inicializamos la cola
+void inicializar_cola(Cola* cola) {
+    cola->frente = cola->final = 0;
+}
+
+// Verificamos si la cola está vacía
+int es_cola_vacia(Cola* cola) {
+    return cola->frente == cola->final;
+}
+
+// Encolamos un nuevo punto
+void encolar(Cola* cola, int x, int y) {
+    cola->puntos[cola->final].x = x;
+    cola->puntos[cola->final].y = y;
+    cola->final++;
+}
+
+// Desencolamos un punto
+Punto desencolar(Cola* cola) {
+    return cola->puntos[cola->frente++];
+}
+
+// Imprimimos el estado actual del laberinto
+void imprimir_laberinto() {
+    for (int i = 0; i < SIZE; i++) {
+        for (int j = 0; j < SIZE; j++) {
+            if (i == INICIO_X && j == INICIO_Y)
+                mvprintw(i, j * 2, "I ");
+            else if (i == FIN_X && j == FIN_Y)
+                mvprintw(i, j * 2, "F ");
+            else if (laberinto[i][j] == RUTA)
+                mvprintw(i, j * 2, ". ");
+            else
+                mvprintw(i, j * 2, "%c ", laberinto[i][j] == CAMINO ? ' ' : '#');
+        }
+    }
+    refresh();
+}
+
+// Resolvemos el laberinto usando BFS
+void resolver_laberinto() {
+    int visitado[SIZE][SIZE] = {0};
+    Cola cola;
+    inicializar_cola(&cola);
+
+    // Comenzamos desde la posición inicial
+    encolar(&cola, INICIO_X, INICIO_Y);
+    visitado[INICIO_X][INICIO_Y] = 1;
+    laberinto[INICIO_X][INICIO_Y] = RUTA;
+
+    // Mientras haya puntos en la cola
+    while (!es_cola_vacia(&cola)) {
+        Punto actual = desencolar(&cola);
+
+        // Si llegamos a la posición final, el laberinto está resuelto
+        if (actual.x == FIN_X && actual.y == FIN_Y) {
+            mvprintw(SIZE + 1, 0, "¡Laberinto resuelto!\n");
+            refresh();
+            return;
+        }
+
+        // Intentamos movernos en cada dirección
+        for (int i = 0; i < 4; i++) {
+            int nx = actual.x + direcciones[i][0];
+            int ny = actual.y + direcciones[i][1];
+
+            if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE && laberinto[nx][ny] == CAMINO && !visitado[nx][ny]) {
+                encolar(&cola, nx, ny);
+                visitado[nx][ny] = 1;
+                laberinto[nx][ny] = RUTA;
+                imprimir_laberinto();
+                usleep(200000);  // Pausa para ver el proceso
+            }
+        }
+    }
+
+    mvprintw(SIZE + 1, 0, "No se encontró solución al laberinto.\n");
+    refresh();
+}
+
+int main() {
+    // Inicializamos la semilla del generador de números aleatorios
+    srand(time(NULL));
+
+    // Inicializamos ncurses
+    initscr();
+    cbreak();
+    noecho();
+    curs_set(FALSE);
+
+    // Generamos y resolvemos el laberinto
+    inicializar_laberinto();
+    generar_laberinto(INICIO_X, INICIO_Y);
+    imprimir_laberinto();
+    resolver_laberinto();
+
+    // Esperamos a que el usuario presione una tecla para salir
+    getch();
+    endwin();
+
+    return 0;
+}
 
